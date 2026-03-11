@@ -7,32 +7,22 @@ import threading
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 TOKEN = "8751822734:AAGm-ULu8vBX5ChKlgIw1NTau242_7L6uvw"
+
 bot = telebot.TeleBot(TOKEN)
 
-DB_FILE = "database.json"
+DB = "database.json"
 
-# ---------------- DATABASE ----------------
+def load():
+    with open(DB) as f:
+        return json.load(f)
 
-def load_db():
-    try:
-        with open(DB_FILE) as f:
-            return json.load(f)
-    except:
-        return {
-            "groups": [],
-            "badwords": ["spam","scam"],
-            "warnings": {},
-            "welcome":"👋 Welcome {name} to {group}",
-            "goodbye":"👋 Goodbye {name}"
-        }
-
-def save_db(data):
-    with open(DB_FILE,"w") as f:
+def save(data):
+    with open(DB,"w") as f:
         json.dump(data,f,indent=2)
 
-db = load_db()
+db = load()
 
-# ---------------- START ----------------
+# START
 
 @bot.message_handler(commands=["start"])
 def start(m):
@@ -40,68 +30,50 @@ def start(m):
     kb = InlineKeyboardMarkup()
 
     kb.add(
-        InlineKeyboardButton("➕ Add to Group",
-        url=f"https://t.me/{bot.get_me().username}?startgroup=true")
-    )
-
-    kb.add(
-        InlineKeyboardButton("⚙ Settings",callback_data="settings")
+        InlineKeyboardButton(
+            "➕ Add To Group",
+            url=f"https://t.me/{bot.get_me().username}?startgroup=true"
+        )
     )
 
     bot.send_message(
         m.chat.id,
-        "🤖 Group Manager Bot\n\nI help manage Telegram groups.",
+        "🤖 Professional Group Manager Bot",
         reply_markup=kb
     )
 
-# ---------------- SETTINGS PANEL ----------------
+# ACTIVATE GROUP
 
-@bot.callback_query_handler(func=lambda c: c.data=="settings")
-def settings(c):
+@bot.message_handler(commands=["activate"])
+def activate(m):
 
-    kb = InlineKeyboardMarkup(row_width=2)
+    gid = m.chat.id
 
-    kb.add(
-        InlineKeyboardButton("👋 Welcome","welcome"),
-        InlineKeyboardButton("👋 Goodbye","goodbye")
-    )
+    if gid not in db["groups"]:
 
-    kb.add(
-        InlineKeyboardButton("🚫 Badwords","bad"),
-        InlineKeyboardButton("⚠ Warns","warn")
-    )
+        db["groups"].append(gid)
+        save(db)
 
-    kb.add(
-        InlineKeyboardButton("🌙 Night Mode","night"),
-        InlineKeyboardButton("📊 Stats","stats")
-    )
+        bot.send_message(
+            gid,
+            "✅ Bot activated in this group"
+        )
 
-    kb.add(
-        InlineKeyboardButton("❌ Close","close")
-    )
-
-    bot.edit_message_text(
-        "⚙ SETTINGS PANEL",
-        c.message.chat.id,
-        c.message.message_id,
-        reply_markup=kb
-    )
-
-# ---------------- WELCOME ----------------
+# WELCOME
 
 @bot.message_handler(content_types=["new_chat_members"])
 def welcome(m):
 
     text = db["welcome"]
 
-    for user in m.new_chat_members:
+    for u in m.new_chat_members:
 
-        msg = text.replace("{name}",user.first_name)\
+        msg = text.replace("{name}",u.first_name)\
                   .replace("{group}",m.chat.title)
 
         bot.send_message(m.chat.id,msg)
 
-# ---------------- GOODBYE ----------------
+# GOODBYE
 
 @bot.message_handler(content_types=["left_chat_member"])
 def bye(m):
@@ -115,7 +87,7 @@ def bye(m):
         text.replace("{name}",name)
     )
 
-# ---------------- BAN ----------------
+# BAN
 
 @bot.message_handler(commands=["ban"])
 def ban(m):
@@ -129,7 +101,7 @@ def ban(m):
 
     bot.send_message(m.chat.id,"🚫 User banned")
 
-# ---------------- MUTE ----------------
+# MUTE
 
 @bot.message_handler(commands=["mute"])
 def mute(m):
@@ -145,9 +117,9 @@ def mute(m):
         until_date=time.time()+3600
     )
 
-    bot.send_message(m.chat.id,"🔇 Muted 1 hour")
+    bot.send_message(m.chat.id,"🔇 User muted")
 
-# ---------------- WARN ----------------
+# WARN
 
 @bot.message_handler(commands=["warn"])
 def warn(m):
@@ -162,7 +134,7 @@ def warn(m):
 
     db["warnings"][uid] += 1
 
-    save_db(db)
+    save(db)
 
     bot.send_message(
         m.chat.id,
@@ -175,10 +147,13 @@ def warn(m):
 
         bot.send_message(m.chat.id,"🚫 User banned")
 
-# ---------------- BAD WORD FILTER ----------------
+# BAD WORD FILTER
 
 @bot.message_handler(func=lambda m:True)
-def filter_bad(m):
+def filter_msg(m):
+
+    if not m.text:
+        return
 
     for w in db["badwords"]:
 
@@ -191,12 +166,29 @@ def filter_bad(m):
 
             bot.send_message(
                 m.chat.id,
-                "🚫 Bad word not allowed"
+                "🚫 Bad word detected"
             )
 
             return
 
-# ---------------- TAG ALL ----------------
+# ANTI LINK
+
+@bot.message_handler(func=lambda m:"http" in m.text if m.text else False)
+def link_filter(m):
+
+    if db["antilink"]:
+
+        bot.delete_message(
+            m.chat.id,
+            m.message_id
+        )
+
+        bot.send_message(
+            m.chat.id,
+            "🚫 Links not allowed"
+        )
+
+# TAG ALL
 
 @bot.message_handler(commands=["tagall"])
 def tagall(m):
@@ -206,7 +198,7 @@ def tagall(m):
         "📢 Attention everyone!"
     )
 
-# ---------------- STATS ----------------
+# STATS
 
 @bot.message_handler(commands=["stats"])
 def stats(m):
@@ -215,48 +207,34 @@ def stats(m):
 
     bot.send_message(
         m.chat.id,
-        f"📊 Group Stats\nMembers: {members}"
+        f"📊 Members: {members}"
     )
 
-# ---------------- AUTO CHAT ----------------
+# AI GROUP CHAT
 
 def auto_chat():
 
     msgs = [
-        "🔥 Who is active?",
+
+        "🔥 Who is active today?",
         "😂 Send memes",
         "👀 Anyone online?",
-        "💬 Let's talk!"
+        "💬 Let's talk!",
+        "🎉 Group seems quiet today"
+
     ]
 
     for g in db["groups"]:
 
         try:
-            bot.send_message(g,random.choice(msgs))
+            bot.send_message(
+                g,
+                random.choice(msgs)
+            )
         except:
             pass
 
-schedule.every(40).minutes.do(auto_chat)
-
-# ---------------- GROUP ACTIVATE ----------------
-
-@bot.message_handler(commands=["activate"])
-def activate(m):
-
-    gid = m.chat.id
-
-    if gid not in db["groups"]:
-
-        db["groups"].append(gid)
-
-        save_db(db)
-
-        bot.send_message(
-            m.chat.id,
-            "✅ Group activated"
-        )
-
-# ---------------- SCHEDULER ----------------
+schedule.every(30).minutes.do(auto_chat)
 
 def scheduler():
 
@@ -266,8 +244,6 @@ def scheduler():
 
 threading.Thread(target=scheduler).start()
 
-# ---------------- RUN ----------------
-
-print("BOT STARTED")
+print("BOT RUNNING")
 
 bot.infinity_polling()
