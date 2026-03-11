@@ -3,5 +3,6 @@
  "badwords": ["spam","scam"],
  "warnings": {},
  "welcome": "👋 Welcome {name} to {group}",
- "goodbye": "👋 Goodbye {name}"
+ "goodbye": "👋 Goodbye {name}",
+ "antilink": true
 }
