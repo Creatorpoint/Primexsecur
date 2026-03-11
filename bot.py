@@ -5,6 +5,7 @@ import random
 import schedule
 import threading
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import os
 
 TOKEN = os.getenv("BOT_TOKEN")
 
