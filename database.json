@@ -1,0 +1,7 @@
+{
+ "groups": [],
+ "badwords": ["spam","scam"],
+ "warnings": {},
+ "welcome": "👋 Welcome {name} to {group}",
+ "goodbye": "👋 Goodbye {name}"
+}
